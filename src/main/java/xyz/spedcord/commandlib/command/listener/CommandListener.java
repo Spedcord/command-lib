@@ -5,6 +5,7 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Objects;
 import java.util.Optional;
 import javax.annotation.Nonnull;
 import net.dv8tion.jda.api.entities.Guild;
@@ -121,7 +122,7 @@ public class CommandListener extends ListenerAdapter {
                         return false;
                     }
 
-                    return this.matchArgs(annotation, commandArgs);
+                    return this.matchArgs(annotation, Arrays.stream(commandArgs).filter(Objects::nonNull).toArray(String[]::new));
                 })
                 .sorted(Comparator.comparingInt(value -> value.getAnnotation(SubCommand.class).isDefault() ? 1 : 0))
                 .findFirst();
@@ -132,6 +133,18 @@ public class CommandListener extends ListenerAdapter {
 
         final Method method = applicableMethod.get();
         context.setSubCommand(method.getAnnotation(SubCommand.class));
+
+        final String[] flags = context.getSubCommand().parseFlags()
+                ? new String[0]
+                : Arrays.stream(commandArgs)
+                .filter(s -> s.matches("--?[A-Za-z0-9]+"))
+                .toArray(String[]::new);
+        context.setFlags(flags);
+        if (context.getSubCommand().parseFlags()) {
+            context.setArgs(Arrays.stream(commandArgs)
+                    .filter(s -> !s.matches("--?[A-Za-z0-9]+"))
+                    .toArray(String[]::new));
+        }
 
         if (LimitController.isLimited(context)) {
             channel.sendMessage(this.settings.getLimitMessage().get()).queue();
@@ -154,6 +167,8 @@ public class CommandListener extends ListenerAdapter {
 
         final String[] annotationArgs = annotation.args().split("\\s+");
 
+        int n = 0;
+        argLoop:
         for (int i = 0; i < annotationArgs.length; i++) {
             String annotationArg = annotationArgs[i];
             if (!(annotationArg.startsWith("<") && annotationArg.endsWith(">"))
@@ -161,14 +176,21 @@ public class CommandListener extends ListenerAdapter {
                 return false;
             }
 
-            if (commandArgs.length <= i) {
+            if (commandArgs.length <= i + n) {
                 if (!(annotationArg.startsWith("[") && annotationArg.endsWith("]"))) {
                     return false;
                 }
             }
 
             annotationArg = annotationArg.substring(1, annotationArg.length() - 1);
-            final String arg = commandArgs[i];
+            String arg = commandArgs[i + n];
+            while (annotation.parseFlags() && arg.matches("--?[A-Za-z0-9]+")) {
+                if (i + n == commandArgs.length - 1) {
+                    continue argLoop;
+                }
+                arg = commandArgs[i + ++n];
+            }
+
             if (!annotationArg.matches(arg)) {
                 return false;
             }

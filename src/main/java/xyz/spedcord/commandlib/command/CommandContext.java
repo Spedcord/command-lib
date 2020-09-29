@@ -17,7 +17,8 @@ public class CommandContext {
     private final MessageChannel channel;
     private final CommandLibSettings settings;
     private final String label;
-    private final String[] args;
+    private String[] args;
+    private String[] flags;
     private SubCommand subCommand;
 
     public CommandContext(final String label, final String[] args, final Command command, final User user, final Guild guild, final MessageChannel channel, final CommandLibSettings settings) {
@@ -36,6 +37,10 @@ public class CommandContext {
 
     public String[] getArgs() {
         return this.args;
+    }
+
+    public void setArgs(final String[] args) {
+        this.args = args;
     }
 
     public Command getCommand() {
@@ -76,6 +81,14 @@ public class CommandContext {
 
     public void setSubCommand(final SubCommand subCommand) {
         this.subCommand = subCommand;
+    }
+
+    public String[] getFlags() {
+        return this.flags;
+    }
+
+    public void setFlags(final String[] flags) {
+        this.flags = flags;
     }
 
 }

@@ -17,6 +17,8 @@ public @interface SubCommand {
 
     boolean isDefault() default false;
 
+    boolean parseFlags() default false;
+
     LimitMode limitMode() default LimitMode.GLOBAL;
 
     long limitMillis() default 0L;
