@@ -20,6 +20,7 @@ import xyz.spedcord.commandlib.command.Command;
 import xyz.spedcord.commandlib.command.CommandContext;
 import xyz.spedcord.commandlib.command.CommandRegistry;
 import xyz.spedcord.commandlib.command.annotations.SubCommand;
+import xyz.spedcord.commandlib.command.limit.LimitController;
 import xyz.spedcord.commandlib.guild.GuildSettings;
 
 public class CommandListener extends ListenerAdapter {
@@ -73,25 +74,11 @@ public class CommandListener extends ListenerAdapter {
             prefix = this.settings.getFallbackPrefix();
         }
 
-        final String s = guild.getSelfMember().getAsMention();
         if (prefix == null) {
             return;
         }
         final String commandStr = content.substring(prefix.length()).trim();
-        final String[] commandArr = commandStr.split("\\s+");
-        final String commandLabel = commandArr[0];
-        final String[] commandArgs = Arrays.copyOfRange(commandArr, 1, commandArr.length);
-
-        final Optional<Command> commandOptional = this.commandRegistry.getCommand(commandLabel);
-        if (!commandOptional.isPresent()) {
-            // TODO: Unknown command message
-            return;
-        }
-
-        final Command command = commandOptional.get();
-        final CommandContext context = new CommandContext(commandLabel, commandArgs, command, user, guild, channel, this.settings);
-
-        this.handleFurther(command, context, commandArgs);
+        this.handleFurther(commandStr, user, guild, channel);
     }
 
     private void handlePrivateMessage(final Message message, final String content, final PrivateChannel channel, final User user) {
@@ -100,23 +87,25 @@ public class CommandListener extends ListenerAdapter {
         }
 
         final String commandStr = content.substring(this.settings.getFallbackPrefix().length()).trim();
+        this.handleFurther(commandStr, user, null, channel);
+    }
+
+    private void handleFurther(final String commandStr, final User user, final Guild guild, final MessageChannel channel) {
         final String[] commandArr = commandStr.split("\\s+");
         final String commandLabel = commandArr[0];
         final String[] commandArgs = Arrays.copyOfRange(commandArr, 1, commandArr.length);
 
         final Optional<Command> commandOptional = this.commandRegistry.getCommand(commandLabel);
         if (!commandOptional.isPresent()) {
-            // TODO: Unknown command message
+            if (this.settings.isSendUnknownCommandMessage()) {
+                channel.sendMessage(this.settings.getUnknownCommandMessage().get()).queue();
+            }
             return;
         }
 
         final Command command = commandOptional.get();
-        final CommandContext context = new CommandContext(commandLabel, commandArgs, command, user, null, channel, this.settings);
+        final CommandContext context = new CommandContext(commandLabel, commandArgs, command, user, guild, channel, this.settings);
 
-        this.handleFurther(command, context, commandArgs);
-    }
-
-    private void handleFurther(final Command command, final CommandContext context, final String[] commandArgs) {
         final Optional<Method> applicableMethod = Arrays.stream(command.getClass().getDeclaredMethods())
                 .filter(method -> Modifier.isPublic(method.getModifiers()))
                 .filter(method -> method.getParameterCount() == 1)
@@ -142,6 +131,14 @@ public class CommandListener extends ListenerAdapter {
         }
 
         final Method method = applicableMethod.get();
+        context.setSubCommand(method.getAnnotation(SubCommand.class));
+
+        if (LimitController.isLimited(context)) {
+            channel.sendMessage(this.settings.getLimitMessage().get()).queue();
+            return;
+        }
+        LimitController.limit(context);
+
         try {
             method.setAccessible(true);
             method.invoke(command, context);

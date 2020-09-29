@@ -7,6 +7,7 @@ import net.dv8tion.jda.api.entities.PrivateChannel;
 import net.dv8tion.jda.api.entities.TextChannel;
 import net.dv8tion.jda.api.entities.User;
 import xyz.spedcord.commandlib.CommandLibSettings;
+import xyz.spedcord.commandlib.command.annotations.SubCommand;
 
 public class CommandContext {
 
@@ -17,6 +18,7 @@ public class CommandContext {
     private final CommandLibSettings settings;
     private final String label;
     private final String[] args;
+    private SubCommand subCommand;
 
     public CommandContext(final String label, final String[] args, final Command command, final User user, final Guild guild, final MessageChannel channel, final CommandLibSettings settings) {
         this.label = label;
@@ -66,6 +68,14 @@ public class CommandContext {
 
     public boolean isGuild() {
         return this.getChannel() instanceof TextChannel;
+    }
+
+    public SubCommand getSubCommand() {
+        return this.subCommand;
+    }
+
+    public void setSubCommand(final SubCommand subCommand) {
+        this.subCommand = subCommand;
     }
 
 }

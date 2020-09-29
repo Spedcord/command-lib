@@ -4,6 +4,7 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
+import xyz.spedcord.commandlib.command.limit.LimitMode;
 import xyz.spedcord.commandlib.permission.PermissionLevel;
 
 @Retention(RetentionPolicy.RUNTIME)
@@ -15,5 +16,9 @@ public @interface SubCommand {
     String args() default "";
 
     boolean isDefault() default false;
+
+    LimitMode limitMode() default LimitMode.GLOBAL;
+
+    long limitMillis() default 0L;
 
 }
