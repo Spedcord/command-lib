@@ -1,8 +1,8 @@
 package xyz.spedcord.commandlib.command.listener;
 
-import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Optional;
@@ -34,6 +34,10 @@ public class CommandListener extends ListenerAdapter {
 
     @Override
     public void onMessageReceived(@Nonnull final MessageReceivedEvent event) {
+        if (!this.settings.isAllowBots() && event.getAuthor().isBot()) {
+            return;
+        }
+
         final Message message = event.getMessage();
         final String content = message.getContentRaw();
         final MessageChannel channel = message.getChannel();
@@ -49,6 +53,9 @@ public class CommandListener extends ListenerAdapter {
     }
 
     private void handleGuildMessage(final Message message, final String content, final TextChannel channel, final User user, final Guild guild) {
+        if (this.settings.getSettingsProvider() == null) {
+            return;
+        }
         final GuildSettings guildSettings = this.settings.getSettingsProvider().getSettings(guild.getIdLong());
 
         String prefix = null;
@@ -59,12 +66,14 @@ public class CommandListener extends ListenerAdapter {
             if (optional.isPresent()) {
                 prefix = optional.get();
             }
-        } else if (guildSettings.isAllowMention() && content.startsWith(guild.getSelfMember().getAsMention())) {
-            prefix = guild.getSelfMember().getAsMention();
-        } else if (content.startsWith(this.settings.getFallbackPrefix()) && !guildSettings.isAllowMention() && guildSettings.getPrefixes().length == 0) {
+        } else if (guildSettings.isAllowMention() && content.matches("<@!?\\d+>( )?.*")
+                && content.substring(0, content.indexOf(">")).replaceAll("[<@!>]", "").equals(guild.getSelfMember().getId())) {
+            prefix = content.substring(0, content.indexOf(">") + 1);
+        } else if (content.startsWith(this.settings.getFallbackPrefix()) && guildSettings.getPrefixes().length == 0) {
             prefix = this.settings.getFallbackPrefix();
         }
 
+        final String s = guild.getSelfMember().getAsMention();
         if (prefix == null) {
             return;
         }
@@ -109,7 +118,7 @@ public class CommandListener extends ListenerAdapter {
 
     private void handleFurther(final Command command, final CommandContext context, final String[] commandArgs) {
         final Optional<Method> applicableMethod = Arrays.stream(command.getClass().getDeclaredMethods())
-                .filter(AccessibleObject::isAccessible)
+                .filter(method -> Modifier.isPublic(method.getModifiers()))
                 .filter(method -> method.getParameterCount() == 1)
                 .filter(method -> method.getParameterTypes()[0] == CommandContext.class)
                 .filter(method -> method.isAnnotationPresent(SubCommand.class))
@@ -117,6 +126,10 @@ public class CommandListener extends ListenerAdapter {
                     final SubCommand annotation = method.getAnnotation(SubCommand.class);
                     if (annotation.isDefault()) {
                         return true;
+                    }
+
+                    if (!this.settings.getPermissionProvider().hasPermission(annotation.requiredPerms(), context)) {
+                        return false;
                     }
 
                     return this.matchArgs(annotation, commandArgs);
@@ -130,6 +143,7 @@ public class CommandListener extends ListenerAdapter {
 
         final Method method = applicableMethod.get();
         try {
+            method.setAccessible(true);
             method.invoke(command, context);
         } catch (final IllegalAccessException | InvocationTargetException e) {
             e.printStackTrace();
